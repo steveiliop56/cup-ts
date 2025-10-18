@@ -4,9 +4,13 @@
   "private": true,
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/semver": "^7.7.1",
     "vitest": "^3.2.4"
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "semver": "^7.7.3"
   }
 }
