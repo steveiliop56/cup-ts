@@ -33,3 +33,10 @@ export function parseWWWAuthenticate(wwwAuth: string): string {
 
   return realmMatch[1];
 }
+
+export function toBearerAuth(token: string | null): string | null {
+  if (!token) {
+    return null;
+  }
+  return `Bearer ${token}`;
+}

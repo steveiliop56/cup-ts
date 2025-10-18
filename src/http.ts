@@ -44,7 +44,7 @@ export class Client {
 
       return { response: response, message: null };
     } catch (e) {
-      return { response: null, message: `request failed: ${e}` };
+      return { response: null, message: (e as Error).message };
     }
   }
 
