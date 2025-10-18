@@ -62,3 +62,38 @@ export async function getLatestDigest(
     return { ...image, error: (e as Error).message };
   }
 }
+
+export async function getToken(
+  images: Image[],
+  authUrl: string,
+  credentials: string | null,
+  client: ClientImplementation
+): Promise<string> {
+  try {
+    var params: string[] = [];
+
+    for (const image of images) {
+      params.push(`&scope=repository:${image.parts.registry}:pull`);
+    }
+
+    const headers: Record<string, string> = {
+      Authorization: credentials ?? "",
+    };
+
+    const res = await client.get(
+      `${authUrl}${params.join("")}`,
+      headers,
+      false
+    );
+
+    if (!res.response) {
+      throw new Error(res.message ?? "failed to fetch token");
+    }
+
+    const data = (await res.response.json()) as { token: string };
+
+    return data.token;
+  } catch (e) {
+    throw new Error((e as Error).message);
+  }
+}
