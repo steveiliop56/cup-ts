@@ -15,5 +15,4 @@ export interface Image {
   parts: Parts;
   digestInfo?: DigestInfo;
   versionInfo?: VersionInfo;
-  error?: string;
 }

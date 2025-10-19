@@ -79,34 +79,30 @@ export class Registry implements IRegistry {
   }
 
   public async getLatestDigest(image: Image): Promise<Image> {
-    try {
-      const protocol = this.getProtocol();
-      const url = `${protocol}://${this.config.host}/v2/${image.parts.repository}/manifests/${image.parts.tag}`;
-      const authorization = toBearerAuth(this.token);
-      const headers: Record<string, string> = {
-        Accept:
-          "application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json",
-        Authorization: authorization ?? "",
-      };
+    const protocol = this.getProtocol();
+    const url = `${protocol}://${this.config.host}/v2/${image.parts.repository}/manifests/${image.parts.tag}`;
+    const authorization = toBearerAuth(this.token);
+    const headers: Record<string, string> = {
+      Accept:
+        "application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json",
+      Authorization: authorization ?? "",
+    };
 
-      const res = await this.client.head(url, headers);
+    const res = await this.client.head(url, headers);
 
-      if (!res.response) {
-        return { ...image, error: res.message ?? "failed to fetch manifest" };
-      }
-
-      const remoteDigests = res.response.headers.get("docker-content-digest");
-
-      return {
-        ...image,
-        digestInfo: {
-          localDigests: image.digestInfo?.localDigests ?? [],
-          remoteDigest: remoteDigests ?? undefined,
-        },
-      };
-    } catch (e) {
-      return { ...image, error: (e as Error).message };
+    if (!res.response) {
+      throw new Error("failed to fetch image manifest");
     }
+
+    const remoteDigests = res.response.headers.get("docker-content-digest");
+
+    return {
+      ...image,
+      digestInfo: {
+        localDigests: image.digestInfo?.localDigests ?? [],
+        remoteDigest: remoteDigests ?? undefined,
+      },
+    };
   }
 
   public async getExtraTags(
@@ -118,7 +114,7 @@ export class Registry implements IRegistry {
     const res = await this.client.get(url, headers, false);
 
     if (!res.response) {
-      return null;
+      throw new Error("failed to fetch tags");
     }
 
     var nextUrl: string | null = null;
@@ -194,57 +190,53 @@ export class Registry implements IRegistry {
     base: Version,
     ignoreUpdateType: UpdateType = UpdateType.None
   ): Promise<Image> {
-    try {
-      const protocol = this.getProtocol();
-      const baseUrl = `${protocol}://${this.config.host}`;
-      const authorization = toBearerAuth(this.token);
-      const headers: Record<string, string> = {
-        Authorization: authorization ?? "",
-        Accept: "application/json",
-      };
+    const protocol = this.getProtocol();
+    const baseUrl = `${protocol}://${this.config.host}`;
+    const authorization = toBearerAuth(this.token);
+    const headers: Record<string, string> = {
+      Authorization: authorization ?? "",
+      Accept: "application/json",
+    };
 
-      var tags: Version[] = [];
-      var nextUrl: string = baseUrl + `/v2/${image.parts.repository}/tags/list`;
-      var recursion: number = 0;
+    var tags: Version[] = [];
+    var nextUrl: string = baseUrl + `/v2/${image.parts.repository}/tags/list`;
+    var recursion: number = 0;
 
-      while (nextUrl && recursion < MAXIMUM_RECURSION) {
-        const extraTags = await this.getExtraTags(
-          nextUrl,
-          base,
-          headers,
-          ignoreUpdateType
-        );
+    while (nextUrl && recursion < MAXIMUM_RECURSION) {
+      const extraTags = await this.getExtraTags(
+        nextUrl,
+        base,
+        headers,
+        ignoreUpdateType
+      );
 
-        if (!extraTags) {
-          return { ...image, error: "failed to fetch tags" };
-        }
-
-        tags = tags.concat(extraTags.versions);
-        if (extraTags.nextUrl) {
-          nextUrl = baseUrl + extraTags.nextUrl;
-        }
-        recursion += 1;
+      if (!extraTags) {
+        throw new Error("failed to fetch extra tags");
       }
 
-      for (const tag of tags) {
-        // "hack" to compare objects
-        if (JSON.stringify(tag) === JSON.stringify(base) && image.digestInfo) {
-          const latestDigest = await this.getLatestDigest(image);
-          image = latestDigest;
-        } else {
-          image = {
-            ...image,
-            versionInfo: {
-              latestRemoteTag: tag,
-              currentTag: base,
-            },
-          };
-        }
+      tags = tags.concat(extraTags.versions);
+      if (extraTags.nextUrl) {
+        nextUrl = baseUrl + extraTags.nextUrl;
       }
-
-      return { ...image };
-    } catch (e) {
-      return { ...image, error: (e as Error).message };
+      recursion += 1;
     }
+
+    for (const tag of tags) {
+      // "hack" to compare objects
+      if (JSON.stringify(tag) === JSON.stringify(base) && image.digestInfo) {
+        const latestDigest = await this.getLatestDigest(image);
+        image = latestDigest;
+      } else {
+        image = {
+          ...image,
+          versionInfo: {
+            latestRemoteTag: tag,
+            currentTag: base,
+          },
+        };
+      }
+    }
+
+    return { ...image };
   }
 }

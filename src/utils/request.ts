@@ -1,5 +1,3 @@
-import type { RegistryConfig } from "../config";
-
 // custom implementation
 export function parseWWWAuthenticate(wwwAuth: string): string {
   const bearerMatch = wwwAuth.match(/^Bearer\s+/);
