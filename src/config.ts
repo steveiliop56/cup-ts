@@ -1,7 +1,8 @@
 export interface RegistryConfig {
-  authentication?: string;
   insecure: boolean;
-  ignore: boolean;
+  host: string;
+  username?: string;
+  password?: string;
 }
 
 export enum UpdateType {

@@ -1,11 +1,11 @@
-import { RequestMethod, type RequestResult } from "./types/http";
+import { RequestMethod, type IClient, type RequestResult } from "./types/http";
 
-export class Client {
+export class Client implements IClient {
   private async request(
     url: string,
     method: RequestMethod,
     headers: Record<string, string>,
-    ignore_401: boolean
+    ignore401: boolean
   ): Promise<RequestResult> {
     try {
       const request = new Request(url, {
@@ -22,7 +22,7 @@ export class Client {
       }
 
       if (status == 401) {
-        if (ignore_401) {
+        if (ignore401) {
           return { response: response, message: null };
         }
         return { response: null, message: `${method} ${url}: unauthorized` };
@@ -51,9 +51,9 @@ export class Client {
   public async get(
     url: string,
     headers: Record<string, string> = {},
-    ignore_401: boolean = false
+    ignore401: boolean = false
   ): Promise<RequestResult> {
-    return this.request(url, RequestMethod.GET, headers, ignore_401);
+    return this.request(url, RequestMethod.GET, headers, ignore401);
   }
 
   public async head(

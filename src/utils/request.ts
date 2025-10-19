@@ -1,22 +1,5 @@
 import type { RegistryConfig } from "../config";
 
-export function getProtocol(
-  registry: string,
-  registryConfig: Map<string, RegistryConfig>
-): string {
-  const config = registryConfig.keys().find((key) => key === registry);
-
-  if (!config) {
-    return "https";
-  }
-
-  if (registryConfig.get(config)?.insecure) {
-    return "http";
-  }
-
-  return "https";
-}
-
 // custom implementation
 export function parseWWWAuthenticate(wwwAuth: string): string {
   const bearerMatch = wwwAuth.match(/^Bearer\s+/);
@@ -39,4 +22,14 @@ export function toBearerAuth(token: string | null): string | null {
     return null;
   }
   return `Bearer ${token}`;
+}
+
+export function toBasicAuth(
+  username: string | null,
+  password: string | null
+): string | null {
+  if (!username || !password) {
+    return null;
+  }
+  return `Basic ${btoa(`${username}:${password}`)}`;
 }

@@ -8,7 +8,7 @@ export interface RequestResult {
   message: string | null;
 }
 
-export interface ClientImplementation {
+export interface IClient {
   get(
     url: string,
     headers: Record<string, string>,
