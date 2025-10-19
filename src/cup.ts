@@ -37,7 +37,11 @@ export class Cup {
       };
     }
 
-    registryInstance = new Registry(this.client, registryConfig);
+    registryInstance = new Registry(
+      this.client,
+      registryConfig,
+      this.config.maxPages
+    );
 
     const image: Image = {
       parts: {

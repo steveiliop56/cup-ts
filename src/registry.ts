@@ -10,16 +10,16 @@ import {
   toBearerAuth,
 } from "./utils/request";
 
-const MAXIMUM_RECURSION = 10;
-
 export class Registry implements IRegistry {
   private client: IClient;
   private config: RegistryConfig;
+  private maxPages: number;
   private token: string | null = null;
 
-  constructor(client: IClient, config: RegistryConfig) {
+  constructor(client: IClient, config: RegistryConfig, maxPages: number = 10) {
     this.config = config;
     this.client = client;
+    this.maxPages = maxPages;
   }
 
   private getProtocol(): string {
@@ -125,6 +125,12 @@ export class Registry implements IRegistry {
       const match = nextUrlRaw.match(/<(.*)>/);
       if (match && match[1]) {
         nextUrl = match[1];
+        const page = nextUrl.match(/&n=([0-9]*)/);
+        if (page && page[1]) {
+          if (page[1] === "0") {
+            nextUrl = null;
+          }
+        }
       }
     }
 
@@ -143,25 +149,22 @@ export class Registry implements IRegistry {
       });
     }
 
-    versions.filter((v) => {
+    // Filter out duplicate versions (v1.0.0-beta.1 and v1.0.0-beta.2 both map to 1.0.0)
+    versions = versions.reduce((acc: Version[], item: Version) => {
       if (
-        !(base.patch !== undefined && v.patch === undefined) ||
-        !(base.patch === undefined && v.patch === undefined)
+        !acc.find(
+          (v) =>
+            v.major === item.major &&
+            v.minor === item.minor &&
+            v.patch === item.patch
+        )
       ) {
-        return false;
+        acc.push(item);
       }
+      return acc;
+    }, []);
 
-      if (
-        !(base.minor !== undefined && v.minor === undefined) ||
-        !(base.minor === undefined && v.minor === undefined)
-      ) {
-        return false;
-      }
-
-      return true;
-    });
-
-    versions.filter((v) => {
+    versions = versions.filter((v) => {
       switch (ignoreUpdateType) {
         case UpdateType.Major:
           return v.major === base.major;
@@ -173,7 +176,6 @@ export class Registry implements IRegistry {
             v.minor === base.minor &&
             v.patch === base.patch
           );
-        case UpdateType.None:
         default:
           return true;
       }
@@ -200,9 +202,9 @@ export class Registry implements IRegistry {
 
     var tags: Version[] = [];
     var nextUrl: string = baseUrl + `/v2/${image.parts.repository}/tags/list`;
-    var recursion: number = 0;
+    var pages: number = 0;
 
-    while (nextUrl && recursion < MAXIMUM_RECURSION) {
+    while (nextUrl && pages < this.maxPages) {
       const extraTags = await this.getExtraTags(
         nextUrl,
         base,
@@ -217,15 +219,27 @@ export class Registry implements IRegistry {
       tags = tags.concat(extraTags.versions);
       if (extraTags.nextUrl) {
         nextUrl = baseUrl + extraTags.nextUrl;
+      } else {
+        nextUrl = "";
       }
-      recursion += 1;
+      pages += 1;
     }
 
     for (const tag of tags) {
-      // "hack" to compare objects
-      if (JSON.stringify(tag) === JSON.stringify(base) && image.digestInfo) {
+      if (
+        tag.major === base.major &&
+        tag.minor === base.minor &&
+        tag.patch === base.patch &&
+        image.digestInfo
+      ) {
         const latestDigest = await this.getLatestDigest(image);
-        image = latestDigest;
+        image = {
+          ...latestDigest,
+          versionInfo: {
+            latestRemoteTag: tag,
+            currentTag: base,
+          },
+        };
       } else {
         image = {
           ...image,

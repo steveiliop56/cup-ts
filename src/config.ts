@@ -14,4 +14,5 @@ export enum UpdateType {
 
 export interface Config {
   registries: RegistryConfig[];
+  maxPages?: number;
 }
