@@ -9,6 +9,7 @@ import {
   toBasicAuth,
   toBearerAuth,
 } from "./utils/request";
+import { formatVersion } from "./utils/version";
 
 export class Registry implements IRegistry {
   private client: IClient;
@@ -139,13 +140,14 @@ export class Registry implements IRegistry {
     var versions: Version[] = [];
 
     for (const tag of data.tags) {
-      if (!semver.valid(tag)) {
+      const formatted = formatVersion(tag);
+      if (!semver.valid(formatted)) {
         continue;
       }
       versions.push({
-        major: semver.major(tag),
-        minor: semver.minor(tag),
-        patch: semver.patch(tag),
+        major: semver.major(formatted),
+        minor: semver.minor(formatted),
+        patch: semver.patch(formatted),
       });
     }
 

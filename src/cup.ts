@@ -5,6 +5,7 @@ import type { IClient } from "./types/http";
 import type { Image } from "./types/image";
 import type { IRegistry } from "./types/registry";
 import semver from "semver";
+import { formatVersion } from "./utils/version";
 
 export class Cup {
   private client: IClient;
@@ -47,7 +48,7 @@ export class Cup {
       parts: {
         registry: registry,
         repository: `${owner}/${repo}`,
-        tag: tag,
+        tag: formatVersion(tag),
       },
       digestInfo: {
         localDigests: localDigests,
@@ -66,9 +67,9 @@ export class Cup {
     return await registryInstance.getLatestTag(
       image,
       {
-        major: semver.major(tag),
-        minor: semver.minor(tag),
-        patch: semver.patch(tag),
+        major: semver.major(image.parts.tag),
+        minor: semver.minor(image.parts.tag),
+        patch: semver.patch(image.parts.tag),
       },
       ignoreUpdateType
     );
