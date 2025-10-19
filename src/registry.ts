@@ -2,7 +2,7 @@ import semver from "semver";
 import { UpdateType, type RegistryConfig } from "./config";
 import type { IClient } from "./types/http";
 import type { Image } from "./types/image";
-import type { GetExtraTags } from "./types/registry";
+import type { GetExtraTags, IRegistry } from "./types/registry";
 import type { Version } from "./types/version";
 import {
   parseWWWAuthenticate,
@@ -12,7 +12,7 @@ import {
 
 const MAXIMUM_RECURSION = 10;
 
-export class Registry {
+export class Registry implements IRegistry {
   private client: IClient;
   private config: RegistryConfig;
   private token: string | null = null;
@@ -31,65 +31,57 @@ export class Registry {
   }
 
   public async getAuthURL(): Promise<string | null> {
-    try {
-      const protocol = this.getProtocol();
-      const url = `${protocol}://${this.config.host}/v2/`;
-      const res = await this.client.get(url, {}, true);
+    const protocol = this.getProtocol();
+    const url = `${protocol}://${this.config.host}/v2/`;
+    const res = await this.client.get(url, {}, true);
 
-      if (!res.response) {
-        return null;
-      }
-
-      if (res.response.status === 401) {
-        const wwwAuth = res.response.headers.get("www-authenticate");
-        return parseWWWAuthenticate(wwwAuth ?? "");
-      }
-
-      return null;
-    } catch {
+    if (!res.response) {
       return null;
     }
+
+    if (res.response.status === 401) {
+      const wwwAuth = res.response.headers.get("www-authenticate");
+      return parseWWWAuthenticate(wwwAuth ?? "");
+    }
+
+    return null;
   }
 
   public async getToken(
     authURL: string,
     images: Image[]
   ): Promise<string | null> {
-    try {
-      var params: string[] = [];
+    var params: string[] = [];
 
-      for (const image of images) {
-        params.push(`&scope=repository:${image.parts.registry}:pull`);
-      }
+    for (const image of images) {
+      params.push(`?scope=repository:${image.parts.repository}:pull`);
+    }
 
-      const headers: Record<string, string> = {
-        Authorization:
-          toBasicAuth(this.config.username ?? "", this.config.password ?? "") ??
-          "",
-      };
+    const headers: Record<string, string> = {
+      Authorization:
+        toBasicAuth(this.config.username ?? "", this.config.password ?? "") ??
+        "",
+    };
 
-      const res = await this.client.get(
-        `${authURL}${params.join("")}`,
-        headers,
-        false
-      );
+    const res = await this.client.get(
+      `${authURL}${params.join("")}`,
+      headers,
+      false
+    );
 
-      if (!res.response) {
-        return null;
-      }
-
-      const data = (await res.response.json()) as { token: string };
-
-      return data.token;
-    } catch (e) {
+    if (!res.response) {
       return null;
     }
+
+    const data = (await res.response.json()) as { token: string };
+
+    return data.token;
   }
 
   public async getLatestDigest(image: Image): Promise<Image> {
     try {
       const protocol = this.getProtocol();
-      const url = `${protocol}://${this.config.host}/v2/${image.parts.registry}/manifests/${image.parts.tag}`;
+      const url = `${protocol}://${this.config.host}/v2/${image.parts.repository}/manifests/${image.parts.tag}`;
       const authorization = toBearerAuth(this.token);
       const headers: Record<string, string> = {
         Accept:
@@ -123,72 +115,78 @@ export class Registry {
     headers: Record<string, string>,
     ignoreUpdateType: UpdateType = UpdateType.None
   ): Promise<GetExtraTags | null> {
-    try {
-      const res = await this.client.get(url, headers, false);
+    const res = await this.client.get(url, headers, false);
 
-      if (!res.response) {
-        return null;
-      }
-
-      const nextUrl = res.response.headers.get("link");
-      const data = (await res.response.json()) as { tags: string[] };
-
-      var versions: Version[] = [];
-
-      for (const tag of data.tags) {
-        if (!semver.valid(tag)) {
-          continue;
-        }
-        versions.push({
-          major: semver.major(tag),
-          minor: semver.minor(tag),
-          patch: semver.patch(tag),
-        });
-      }
-
-      versions.filter((v) => {
-        if (
-          !(base.patch !== undefined && v.patch === undefined) ||
-          !(base.patch === undefined && v.patch === undefined)
-        ) {
-          return false;
-        }
-
-        if (
-          !(base.minor !== undefined && v.minor === undefined) ||
-          !(base.minor === undefined && v.minor === undefined)
-        ) {
-          return false;
-        }
-
-        return true;
-      });
-
-      versions.filter((v) => {
-        switch (ignoreUpdateType) {
-          case UpdateType.Major:
-            return v.major === base.major;
-          case UpdateType.Minor:
-            return v.major === base.major && v.minor === base.minor;
-          case UpdateType.Patch:
-            return (
-              v.major === base.major &&
-              v.minor === base.minor &&
-              v.patch === base.patch
-            );
-          case UpdateType.None:
-          default:
-            return true;
-        }
-      });
-
-      return {
-        versions: versions,
-        nextUrl: nextUrl,
-      };
-    } catch {
+    if (!res.response) {
       return null;
     }
+
+    var nextUrl: string | null = null;
+
+    const nextUrlRaw = res.response.headers.get("link");
+
+    if (nextUrlRaw) {
+      const match = nextUrlRaw.match(/<(.*)>/);
+      if (match && match[1]) {
+        nextUrl = match[1];
+      }
+    }
+
+    const data = (await res.response.json()) as { tags: string[] };
+
+    var versions: Version[] = [];
+
+    for (const tag of data.tags) {
+      if (!semver.valid(tag)) {
+        continue;
+      }
+      versions.push({
+        major: semver.major(tag),
+        minor: semver.minor(tag),
+        patch: semver.patch(tag),
+      });
+    }
+
+    versions.filter((v) => {
+      if (
+        !(base.patch !== undefined && v.patch === undefined) ||
+        !(base.patch === undefined && v.patch === undefined)
+      ) {
+        return false;
+      }
+
+      if (
+        !(base.minor !== undefined && v.minor === undefined) ||
+        !(base.minor === undefined && v.minor === undefined)
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    versions.filter((v) => {
+      switch (ignoreUpdateType) {
+        case UpdateType.Major:
+          return v.major === base.major;
+        case UpdateType.Minor:
+          return v.major === base.major && v.minor === base.minor;
+        case UpdateType.Patch:
+          return (
+            v.major === base.major &&
+            v.minor === base.minor &&
+            v.patch === base.patch
+          );
+        case UpdateType.None:
+        default:
+          return true;
+      }
+    });
+
+    return {
+      versions: versions,
+      nextUrl: nextUrl,
+    };
   }
 
   public async getLatestTag(
@@ -198,7 +196,7 @@ export class Registry {
   ): Promise<Image> {
     try {
       const protocol = this.getProtocol();
-      const url = `${protocol}://${this.config.host}/v2/${image.parts.registry}/tags/list`;
+      const baseUrl = `${protocol}://${this.config.host}`;
       const authorization = toBearerAuth(this.token);
       const headers: Record<string, string> = {
         Authorization: authorization ?? "",
@@ -206,7 +204,7 @@ export class Registry {
       };
 
       var tags: Version[] = [];
-      var nextUrl: string = url;
+      var nextUrl: string = baseUrl + `/v2/${image.parts.repository}/tags/list`;
       var recursion: number = 0;
 
       while (nextUrl && recursion < MAXIMUM_RECURSION) {
@@ -222,27 +220,29 @@ export class Registry {
         }
 
         tags = tags.concat(extraTags.versions);
-        nextUrl = extraTags.nextUrl ?? "";
+        if (extraTags.nextUrl) {
+          nextUrl = baseUrl + extraTags.nextUrl;
+        }
         recursion += 1;
       }
 
       for (const tag of tags) {
-        if (tag === base && image.digestInfo) {
+        // "hack" to compare objects
+        if (JSON.stringify(tag) === JSON.stringify(base) && image.digestInfo) {
           const latestDigest = await this.getLatestDigest(image);
-          return latestDigest;
+          image = latestDigest;
+        } else {
+          image = {
+            ...image,
+            versionInfo: {
+              latestRemoteTag: tag,
+              currentTag: base,
+            },
+          };
         }
-
-        return {
-          ...image,
-          versionInfo: {
-            latestRemoteTag: tag,
-            currentTag: base,
-            formatStr: `v${tag.major}.${tag.minor}.${tag.patch}`,
-          },
-        };
       }
 
-      return { ...image, error: "no newer tag found" };
+      return { ...image };
     } catch (e) {
       return { ...image, error: (e as Error).message };
     }

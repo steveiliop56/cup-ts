@@ -11,3 +11,7 @@ export enum UpdateType {
   Minor,
   Patch,
 }
+
+export interface Config {
+  registries: RegistryConfig[];
+}
