@@ -1,14 +1,22 @@
 {
   "name": "cup-ts",
   "type": "module",
-  "private": true,
+  "private": false,
+  "files": [
+    "dist",
+    "package.json",
+    "README.md"
+  ],
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "bunup main.ts"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/semver": "^7.7.1",
+    "bunup": "^0.15.4",
+    "typescript": "^5.9.3",
     "vitest": "^3.2.4"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
   },
   "dependencies": {
     "semver": "^7.7.3"

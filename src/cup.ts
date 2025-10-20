@@ -7,6 +7,15 @@ import type { IRegistry } from "./types/registry";
 import semver from "semver";
 import { formatVersion } from "./utils/version";
 
+export type CheckParams = {
+  registry: string,
+    owner: string,
+    repo: string,
+    tag: string,
+    localDigests: string[],
+    ignoreUpdateType: UpdateType
+}
+
 export class Cup {
   private client: IClient;
   private config: Config = { registries: [] };
@@ -18,14 +27,9 @@ export class Cup {
     this.client = new Client();
   }
 
-  public async check(
-    registry: string,
-    owner: string,
-    repo: string,
-    tag: string,
-    localDigests: string[],
-    ignoreUpdateType: UpdateType = UpdateType.None
-  ): Promise<Image | null> {
+  public async check(params: CheckParams): Promise<Image | null> {
+    const { registry, owner, repo, tag, localDigests, ignoreUpdateType = UpdateType.None } = params;
+
     var registryInstance: IRegistry;
     var registryConfig: RegistryConfig | undefined = undefined;
 
